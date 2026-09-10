@@ -160,3 +160,75 @@ func ExtractMemberSpeciesIDs(chainJSON []byte) ([]int, error) {
 
 	return memberIDs, nil
 }
+
+// evolutionChainNode mirrors one node of the PokéAPI evolution chain tree.
+type evolutionChainNode struct {
+	Species struct {
+		URL string `json:"url"`
+	} `json:"species"`
+	EvolutionDetails []evolutionDetail    `json:"evolution_details"`
+	EvolvesTo        []evolutionChainNode `json:"evolves_to"`
+}
+
+// evolutionDetail holds the trigger conditions for a single evolution edge.
+type evolutionDetail struct {
+	MinLevel *int `json:"min_level"`
+	Trigger  struct {
+		Name string `json:"name"`
+	} `json:"trigger"`
+}
+
+// ExtractEvolutionLinks walks the evolution chain tree and returns every edge
+// with its trigger details. Each evolves_to entry may carry multiple
+// evolution_details; we keep the first one that has a level-up trigger, or the
+// first detail overall so the edge is not lost.
+func ExtractEvolutionLinks(chainJSON []byte) ([]EvolutionLink, []int, error) {
+	var payload struct {
+		Chain evolutionChainNode `json:"chain"`
+	}
+	if err := json.Unmarshal(chainJSON, &payload); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal evolution chain payload: %w", err)
+	}
+
+	var links []EvolutionLink
+	var memberIDs []int
+
+	speciesID := func(n evolutionChainNode) (int, bool) {
+		id, err := parseEvolutionChainIDFromURL(n.Species.URL)
+		return id, err == nil
+	}
+
+	var walk func(n evolutionChainNode)
+	walk = func(n evolutionChainNode) {
+		if fromID, ok := speciesID(n); ok {
+			memberIDs = append(memberIDs, fromID)
+		}
+		for _, child := range n.EvolvesTo {
+			toID, ok := speciesID(child)
+			if !ok {
+				continue
+			}
+
+			fromID, hasFrom := speciesID(n)
+			if hasFrom {
+				link := EvolutionLink{FromSpeciesID: fromID, ToSpeciesID: toID}
+				for _, d := range child.EvolutionDetails {
+					if d.Trigger.Name != "" {
+						link.Trigger = d.Trigger.Name
+					}
+					if d.MinLevel != nil {
+						link.MinLevel = *d.MinLevel
+					}
+					if d.Trigger.Name == "level-up" {
+						break // prefer the level-up detail when present
+					}
+				}
+				links = append(links, link)
+			}
+			walk(child)
+		}
+	}
+	walk(payload.Chain)
+
+	return links, memberIDs, nil
+}

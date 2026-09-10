@@ -11,7 +11,9 @@ import api from './api';
  * @returns {Promise<Object>} Battle state
  */
 export const startBattle = async (mode = '5v5') => {
-  const response = await api.post('/api/battle/start', { mode });
+  // Battle start builds the AI team server-side; 5v5 can legitimately take
+  // longer than the global 10s axios timeout, so give it extra headroom.
+  const response = await api.post('/api/battle/start', { mode }, { timeout: 30000 });
   return response.data;
 };
 

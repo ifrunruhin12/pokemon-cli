@@ -24,33 +24,40 @@ type PokemonXPGain struct {
 	NewDefense  int    `json:"new_defense,omitempty"`
 	OldSpeed    int    `json:"old_speed,omitempty"`
 	NewSpeed    int    `json:"new_speed,omitempty"`
+
+	// Evolution info (set when leveling up triggered an evolution)
+	Evolved     bool   `json:"evolved"`
+	EvolvedFrom string `json:"evolved_from,omitempty"`
+	EvolvedInto string `json:"evolved_into,omitempty"`
+	NewSprite   string `json:"new_sprite,omitempty"`
 }
 
 // CalculateXPForBattle calculates XP for all Pokemon that participated in battle
 func CalculateXPForBattle(bs *BattleState) map[int]int {
 	xpMap := make(map[int]int)
 
-	// Determine base XP based on mode and result
+	// XP rewards are generous by design — evolution should be achievable through
+	// normal play, not a multi-thousand-battle grind.
+	// Win 1v1: 50 XP | Win 5v5: 40 XP per Pokemon
+	// Draw 1v1: 25 XP | Draw 5v5: 20 XP
+	// Loss: 15 XP (consolation — encourages continued play)
 	var baseXP int
-	
+
 	switch bs.Winner {
 	case "player":
-		// Win XP
 		if bs.Mode == "1v1" {
-			baseXP = 20
+			baseXP = 50
 		} else {
-			baseXP = 15
+			baseXP = 40
 		}
 	case "draw":
-		// Draw XP (more than loss, less than win)
 		if bs.Mode == "1v1" {
-			baseXP = 10
+			baseXP = 25
 		} else {
-			baseXP = 8
+			baseXP = 20
 		}
 	default:
-		// Loss XP
-		baseXP = 5
+		baseXP = 15
 	}
 
 	switch bs.Mode {
@@ -122,7 +129,7 @@ func ApplyXPAndLevelUps(ctx context.Context, db *pgxpool.Pool, userID int, xpMap
 
 		// Process level ups
 		for newLevel < 50 {
-			xpRequired := 100 * newLevel
+			xpRequired := 100 // flat cost per level — keeps evolution reachable
 			if newXP >= xpRequired {
 				newXP -= xpRequired
 				newLevel++

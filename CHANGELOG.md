@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+- Pokemon evolution: leveling a Pokemon past its evolution threshold now
+  evolves it into the next form (name, sprite, types, and base stats update).
+  Evolution edges and level thresholds come from the PokéAPI evolution-chain
+  data, stored in the new `evolution_chain.links` column. Only level-up
+  evolutions apply; item/trade evolutions are ignored. Evolutions are shown
+  on the battle result screen and counted in the `poketactix_evolutions_total`
+  metric.
 
 ### Changed
 - Nothing yet

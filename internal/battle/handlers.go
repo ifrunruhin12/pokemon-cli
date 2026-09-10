@@ -20,13 +20,13 @@ import (
 
 // Handler handles battle-related HTTP requests
 type Handler struct {
-	sessions       map[string]*Session // Legacy in-memory sessions for backward compatibility
-	repo           *Repository         // Database repository for persistent storage
-	statsService   StatsService        // Stats service for achievement checking
-	tokenService   TokenService        // Token service for token management
-	enemySelector  EnemySelector       // Anti-repeat enemy selection service
+	sessions       map[string]*Session    // Legacy in-memory sessions for backward compatibility
+	repo           *Repository            // Database repository for persistent storage
+	statsService   StatsService           // Stats service for achievement checking
+	tokenService   TokenService           // Token service for token management
+	enemySelector  EnemySelector          // Anti-repeat enemy selection service
 	pokemonService pokemon.PokemonService // Tiered pokemon fetch service
-	mu             sync.RWMutex        // Mutex for thread-safe access to legacy sessions
+	mu             sync.RWMutex           // Mutex for thread-safe access to legacy sessions
 }
 
 // StatsService defines the interface for stats operations
@@ -476,7 +476,7 @@ func (h *Handler) MakeMoveEnhanced(c *fiber.Ctx) error {
 			rewards := CalculateAllRewards(battleState)
 
 			// Apply all rewards in a single transaction
-			err := ApplyAllRewards(c.Context(), db, userID, battleState, rewards, h.statsService, h.repo)
+			err := ApplyAllRewards(c.Context(), db, userID, battleState, rewards, h.statsService, h.repo, h.pokemonService)
 			if err != nil {
 				// Log error but don't fail the request - battle is already over
 				fmt.Printf("Failed to apply rewards: %v\n", err)

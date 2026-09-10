@@ -31,6 +31,10 @@ func (s staticPokemonService) GetRandomCard(context.Context, bool) (Card, error)
 	return Card{}, nil
 }
 
+func (s staticPokemonService) GetEvolutionForLevel(context.Context, int, int) (*Pokemon, error) {
+	return nil, nil
+}
+
 func TestFetchPokemonPreservesServiceRawData(t *testing.T) {
 	moveServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

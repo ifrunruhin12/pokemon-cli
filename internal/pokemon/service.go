@@ -20,6 +20,9 @@ type PokemonService interface {
 	GetByName(ctx context.Context, name string) (*Pokemon, error)
 	EnsureEvolutionChain(ctx context.Context, speciesID int, optionalChainURL string) (int, error)
 	GetRandomCard(ctx context.Context, allowSpecial bool) (Card, error)
+	// GetEvolutionForLevel returns the Pokemon the given pokemon (by pokemon ID)
+	// evolves into at the given level, or nil if no level-up evolution applies.
+	GetEvolutionForLevel(ctx context.Context, pokemonID int, level int) (*Pokemon, error)
 }
 
 type service struct {
@@ -215,11 +218,12 @@ func (s *service) EnsureEvolutionChain(ctx context.Context, speciesID int, optio
 		if s.client != nil {
 			rawChain, err := s.client.FetchEvolutionChainRaw(ctx, chainID)
 			if err == nil {
-				memberIDs, err := ExtractMemberSpeciesIDs(rawChain)
+				links, memberIDs, err := ExtractEvolutionLinks(rawChain)
 				if err == nil {
 					ec := &EvolutionChain{
 						ID:               chainID,
 						MemberSpeciesIDs: memberIDs,
+						Links:            links,
 						FetchedAt:        time.Now(),
 					}
 					if s.repo != nil {
@@ -253,6 +257,94 @@ func (s *service) EnsureEvolutionChain(ctx context.Context, speciesID int, optio
 		return speciesID, err
 	}
 	return v.(int), nil
+}
+
+// loadEvolutionChain returns the evolution chain by ID from cache, then
+// PostgreSQL, then a cold PokéAPI fetch. Chains stored before the links column
+// existed may have members but no links; those are refreshed once from PokéAPI
+// so evolution data self-heals over time.
+func (s *service) loadEvolutionChain(ctx context.Context, chainID int) *EvolutionChain {
+	if chainID <= 0 {
+		return nil
+	}
+
+	usable := func(ec *EvolutionChain) bool {
+		return ec != nil && (len(ec.Links) > 0 || len(ec.MemberSpeciesIDs) <= 1)
+	}
+
+	var stale *EvolutionChain // multi-member chain cached before links existed
+
+	if s.cache != nil {
+		if ec, err := s.cache.GetEvolutionChain(ctx, chainID); err == nil {
+			if usable(ec) {
+				return ec
+			}
+			stale = ec
+		}
+	}
+
+	if s.repo != nil {
+		if ec, err := s.repo.GetEvolutionChain(ctx, chainID); err == nil {
+			if usable(ec) {
+				if s.cache != nil {
+					_ = s.cache.SetEvolutionChain(ctx, ec)
+				}
+				return ec
+			}
+			stale = ec
+		}
+	}
+
+	// Cold refresh is the only path that can recover missing links.
+	// On failure, fall back to the stale chain (no evolution, but no error).
+	if s.client != nil {
+		if rawChain, err := s.client.FetchEvolutionChainRaw(ctx, chainID); err == nil {
+			if links, memberIDs, err := ExtractEvolutionLinks(rawChain); err == nil {
+				ec := &EvolutionChain{
+					ID:               chainID,
+					MemberSpeciesIDs: memberIDs,
+					Links:            links,
+					FetchedAt:        time.Now(),
+				}
+				if s.repo != nil {
+					_ = s.repo.UpsertEvolutionChain(ctx, ec)
+				}
+				if s.cache != nil {
+					_ = s.cache.SetEvolutionChain(ctx, ec)
+				}
+				return ec
+			}
+		}
+	}
+
+	return stale
+}
+
+// GetEvolutionForLevel returns the target Pokemon if the given pokemon has a
+// level-up evolution whose minimum level has been reached. Branching chains
+// (e.g. Eevee) resolve deterministically to the first qualifying link.
+func (s *service) GetEvolutionForLevel(ctx context.Context, pokemonID int, level int) (*Pokemon, error) {
+	p, err := s.GetByID(ctx, pokemonID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load pokemon %d for evolution check: %w", pokemonID, err)
+	}
+
+	chain := s.loadEvolutionChain(ctx, p.EvolutionChainID)
+	if chain == nil {
+		return nil, nil
+	}
+
+	link := PickEvolutionLink(chain.Links, p.SpeciesID, level)
+	if link == nil {
+		return nil, nil
+	}
+
+	// Pokemon IDs and species IDs align for the base forms this game stores.
+	target, err := s.GetByID(ctx, link.ToSpeciesID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load evolution target %d: %w", link.ToSpeciesID, err)
+	}
+	return target, nil
 }
 
 func (s *service) GetRandomCard(ctx context.Context, allowSpecial bool) (Card, error) {

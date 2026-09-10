@@ -25,6 +25,7 @@ const BattleResult = ({
     coins_earned = 0, 
     xp_gained = {}, 
     level_ups = [],
+    evolutions = [], // Array of pokemon that evolved after the battle
     pokemon_details = [], // Array of pokemon with their XP and level info
     newly_unlocked_achievements = [] // Array of newly unlocked achievements
   } = rewards;
@@ -214,7 +215,11 @@ const BattleResult = ({
                       className="bg-gray-800 rounded-lg p-4 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="text-2xl">{pokemon.sprite || '🎴'}</div>
+                        {pokemon.sprite ? (
+                          <img src={pokemon.sprite} alt={pokemon.name} className="w-10 h-10 object-contain" />
+                        ) : (
+                          <div className="text-2xl">🎴</div>
+                        )}
                         <div>
                           <div className="text-white font-semibold">{pokemon.name}</div>
                           <div className="text-sm text-gray-400">Level {pokemon.level}</div>
@@ -269,6 +274,63 @@ const BattleResult = ({
                       className="bg-gray-800 rounded p-2 text-center"
                     >
                       <div className="text-purple-400 font-semibold">+{xp} XP</div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Evolutions — the star of the show */}
+            {evolutions && evolutions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.6, type: 'spring' }}
+                className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-lg p-6 shadow-xl border-2 border-yellow-400/50"
+              >
+                <h3 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                  <motion.span
+                    animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                  >
+                    ✨
+                  </motion.span>
+                  <span>Evolution!</span>
+                </h3>
+                <div className="space-y-4">
+                  {evolutions.map((evo, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.7 + index * 0.15 }}
+                      className="bg-black/30 rounded-lg p-4 flex items-center justify-center gap-4"
+                    >
+                      {evo.sprite && (
+                        <motion.img
+                          src={evo.sprite}
+                          alt={evo.into}
+                          className="w-20 h-20 object-contain"
+                          initial={{ scale: 0, rotate: -180 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          transition={{ delay: 0.8 + index * 0.15, type: 'spring', stiffness: 200 }}
+                        />
+                      )}
+                      <div className="text-center">
+                        <div className="text-lg text-gray-300 line-through">
+                          {evo.from}
+                        </div>
+                        <motion.div
+                          animate={{ y: [0, -3, 0] }}
+                          transition={{ repeat: Infinity, duration: 1.5 }}
+                          className="text-2xl font-bold text-white"
+                        >
+                          {evo.into}
+                        </motion.div>
+                        <div className="text-sm text-yellow-300">
+                          Evolved at level {evo.level}
+                        </div>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -604,6 +666,13 @@ BattleResult.propTypes = {
       level: PropTypes.number,
       xp_gained: PropTypes.number,
       leveled_up: PropTypes.bool,
+      evolved: PropTypes.bool,
+      sprite: PropTypes.string
+    })),
+    evolutions: PropTypes.arrayOf(PropTypes.shape({
+      from: PropTypes.string,
+      into: PropTypes.string,
+      level: PropTypes.number,
       sprite: PropTypes.string
     })),
     newly_unlocked_achievements: PropTypes.arrayOf(PropTypes.shape({

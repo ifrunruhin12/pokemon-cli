@@ -104,6 +104,15 @@ var (
 		[]string{"event"}, // login_success, login_failure, register
 	)
 
+	// EvolutionTotal counts Pokemon evolutions triggered by leveling up
+	EvolutionTotal = newCounterVec(
+		prometheus.CounterOpts{
+			Name: "poketactix_evolutions_total",
+			Help: "Total number of Pokemon evolutions",
+		},
+		[]string{},
+	)
+
 	// RegisteredUsers tracks total registered users, refreshed periodically from DB
 	RegisteredUsers = newGauge(
 		prometheus.GaugeOpts{
